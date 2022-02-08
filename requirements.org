@@ -45,7 +45,7 @@
       - urllib.request is BANNED
       - urllib.parse is OKAY for parsing URLs
       - you have to parse headers yourself
-   - [ ] You should use the socket library that comes with python
+   - [x] You should use the socket library that comes with python
 
 ** Recommendations
    - Use the httpclient.py skeleton.

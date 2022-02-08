@@ -17,9 +17,9 @@
 # Write your own HTTP GET and POST
 # The point is to understand what you have to send and get experience with it
 
+import re
 import sys
 import socket
-import re
 # you may use urllib to encode data appropriately
 from urllib.parse import urlparse
 
@@ -36,7 +36,7 @@ class HTTPResponse(object):
     
     
     def __str__(self):
-        return f'{str(self.code)}\n{str(self.body)}'
+        return f'{self.code}{self.body}'
 
 class HTTPClient(object):
     #def get_host_port(self,url):
@@ -47,60 +47,86 @@ class HTTPClient(object):
         return None
 
     def get_code(self, data):
-        # TODO
-        return None
+        return int(data.split('\r\n')[0].split(' ')[1])
 
     def get_headers(self,data):
-        # TODO
+        return data.split('\r\n\r\n')[0]
 
-        return None
+    def parse_header(self, header):
+        header_dict = {}
+        for line in header.split('\r\n'):
+            if ':' in line:
+                key, value = line.split(': ')
+                header_dict[key] = value
+
+        return header_dict
 
     def get_body(self, data):
-        # TODO
-
-        return None
+        return data.split('\r\n\r\n')[1]
     
     def build_request(self, target, host, command="GET"):
         '''
         
         References:
-            - https://stackoverflow.com/questions/45965007/multiline-f-string-in-python
+            - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
         '''
-
-        
+        #TODO: add user agent
         date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         header = (
-            f'{command} / HTTP/1.1\r\n'
+            f'{command} {target} HTTP/1.1\r\n'
             f'Date: {date}\r\n'
             f'Host: {host}\r\n'
         )
 
         header += '\r\n'
 
-        print("-"*50, '\n', header, "-"*50)
-
         return header
     
     def sendall(self, data):
-        self.socket.sendall(data.encode('utf-8'))
+        if data:
+            self.socket.sendall(data.encode('utf-8'))
+        else:
+            self.socket.shutdown(socket.SHUT_WR)
         
     def close(self):
         self.socket.close()
 
     # read everything from the socket
     def recvall(self, sock):
-        # buffer = bytearray()
-        # done = False
-        # while not done:
-        #     part = sock.recv(1024)
-        #     print(part)
-        #     print(done)
-        #     if (part):
-        #         buffer.extend(part)
-        #     else:
-        #         done = True 
+        '''
+        References
+            - https://stackoverflow.com/questions/4824451/detect-end-of-http-request-body/4824738
+            - https://www.binarytides.com/receive-full-data-with-the-recv-socket-function-in-python/
+            - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
+            - http://stupidpythonideas.blogspot.com/2013/05/sockets-are-byte-streams-not-message.html
+        '''
+        buffer = bytearray()
+        done = False
+        while not done:
+            part = sock.recv(1024)
+            # parse the header 
 
-        buffer = sock.recv(1024)
+            if (part):
+                buffer.extend(part)
+                
+                # if the part ends in \r\n\r\n, then it is the header
+                if b'\r\n\r\n' in part:
+                    header = self.get_headers(part.decode('utf-8'))
+                    result = self.parse_header(header)
+                    
+                    # parse the header for Content-Length and Connection
+                    
+                    # If the header has a Content-Length, then we need to read that many bytes
+                    if result['Content-Length']:
+                        content_length = int(result['Content-Length'])
+                        if len(buffer) >= content_length:
+                            done = True
+
+            else:
+                # if buffer matches content length, we are done
+                self.close()
+                done = True 
+                
         return buffer.decode('utf-8')
     
     def parse_url(self, url):
@@ -136,33 +162,36 @@ class HTTPClient(object):
         parsed_url = self.parse_url(url)
         host = parsed_url['host']
         port = parsed_url['port']
-
         target = parsed_url['target']
-
 
         try:
             # Connect to server and send data
-            print('Connecting to server...')
+            print('> Connecting to server...')
             self.connect(host, port)
+
             # Send a request in bytes 
-            print('Requesting data...')
+            print('> Requesting data...')
             request  = self.build_request(target, host, 'GET')
+            print(request)
             self.sendall(request)
 
-            print('Receiving data...')
+            print('> Receiving data...')
             data = self.recvall(self.socket)
             
+
             # Parse the response 
             code = self.get_code(data)
-            headers = self.get_headers(data)
+            header = self.get_headers(data)
+            print(header)
+
             body = self.get_body(data)
 
         except Exception as e:
             print("[ERROR]: ", e)
         
         finally:
-            self.close()
-            return HTTPResponse(code, data)
+            
+            return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         # TODO
