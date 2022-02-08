@@ -25,7 +25,7 @@
      a HTTPResponse object
 
 ** Requirements
-   - [ ] Implement basic HTTP GET
+   - [x] Implement basic HTTP GET
    - [ ] Implement basic HTTP POST
    - [ ] The httpclient can pass all the tests in freetests.py
    - [ ] The webserver can pass all the tests in not-free-tests.py

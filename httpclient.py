@@ -35,7 +35,7 @@ class HTTPResponse(object):
         self.body = body
 
     def __str__(self):
-        return f'{self.code}{self.body}'
+        return f'{self.code} {self.body}'
 
 class HTTPClient(object):
     #def get_host_port(self,url):
@@ -63,14 +63,17 @@ class HTTPClient(object):
     def get_body(self, data):
         return data.split('\r\n\r\n')[1]
     
-    def build_request(self, target, host, command="GET"):
+    def build_request(self, options, command="GET", args=None):
         '''
         
         References:
             - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
         '''
-        #TODO: add user agent
+
         date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        target = options['target']
+        host = options['host']
+
         header = (
             f'{command} {target} HTTP/1.1\r\n'
             f'Date: {date}\r\n'
@@ -78,7 +81,20 @@ class HTTPClient(object):
             f'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36\r\n'
         )
 
+        if command == "POST":
+            length = len(options['query']) #TODO get length of body
+            header += (
+                f'Content-Type: application/x-www-form-urlencoded\r\n'
+                f'Content-Length: {length}\r\n'
+                f'Connection: close\r\n'
+            )
+
         header += '\r\n'
+
+        # send the query
+        if command == 'POST':
+            queries = options['query']
+            return header + queries
 
         return header
     
@@ -136,31 +152,33 @@ class HTTPClient(object):
             target = u.path
         else:
             target = '/'
+        parsed_url['target'] = target
 
         if u.hostname:
             host = u.hostname
         else:
             host = u.path
+        parsed_url['host'] = host
 
         if u.port:
             port = u.port
         else:
             port = 80  # arbitrary port
-
-        parsed_url['target'] = target
-        parsed_url['host'] = host
         parsed_url['port'] = port
+
+        parsed_url['query'] = u.query
+
+        print(parsed_url)
 
         return parsed_url
     
     def GET(self, url, args=None):
         code = 500 # internal server error
         data = ''
-
-        parsed_url = self.parse_url(url)
-        host = parsed_url['host']
-        port = parsed_url['port']
-        target = parsed_url['target']
+        
+        options = self.parse_url(url)
+        host = options['host']
+        port = options['port']
 
         try:
             # Connect to server and send data
@@ -169,18 +187,15 @@ class HTTPClient(object):
 
             # Send a request in bytes 
             print('> Requesting data...')
-            request  = self.build_request(target, host, 'GET')
+            request = self.build_request(options, 'GET')
             print(request)
             self.sendall(request)
 
             print('> Receiving data...')
             data = self.recvall(self.socket)
-            
-
-
 
         except Exception as e:
-            print("[ERROR]: ", e)
+            print("[ERROR in GET]: ", e)
         
         finally:
             # Parse the response
@@ -192,9 +207,51 @@ class HTTPClient(object):
             return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        # TODO
+        '''
+            References:
+                - https://reqbin.com/req/zvtstmpb/post-request-example
+
+        '''
+        # TODO: implement POST 
         code = 500
         body = ""
+
+        url = 'https://www.google.com/search?q=cat' #FIXME: temporarily hardcoded, getting a zsh error when trying to use this url
+
+        options = self.parse_url(url)
+        host = options['host']
+        port = options['port']
+        args = options['query']
+
+        if args is None:
+            print("[ERROR]: No POST arguments provided")
+            code = 400
+            body = 'Bad Request'
+            return HTTPResponse(code, body)
+        
+        try:
+            # Connect to server and send data
+            print('> Connecting to server...')
+            self.connect(host, port)
+
+            # Build a request in bytes
+            request = self.build_request(options, 'POST')
+            print(request)
+            # Send the request 
+            print('> Sending data...')
+            self.sendall(request)
+            
+            # Get the response 
+            response = self.recvall(self.socket)
+            print(response)
+
+        except Exception as e:
+            print("[ERROR in POST]: ", e)
+        
+        
+        
+
+
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
