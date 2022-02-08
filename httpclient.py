@@ -33,8 +33,7 @@ class HTTPResponse(object):
     def __init__(self, code=200, body=""):
         self.code = code
         self.body = body
-    
-    
+
     def __str__(self):
         return f'{self.code}{self.body}'
 
@@ -76,6 +75,7 @@ class HTTPClient(object):
             f'{command} {target} HTTP/1.1\r\n'
             f'Date: {date}\r\n'
             f'Host: {host}\r\n'
+            f'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36\r\n'
         )
 
         header += '\r\n'
@@ -114,10 +114,8 @@ class HTTPClient(object):
                     header = self.get_headers(part.decode('utf-8'))
                     result = self.parse_header(header)
                     
-                    # parse the header for Content-Length and Connection
-                    
                     # If the header has a Content-Length, then we need to read that many bytes
-                    if result['Content-Length']:
+                    if 'Content-Length' in result.keys():
                         content_length = int(result['Content-Length'])
                         if len(buffer) >= content_length:
                             done = True
@@ -179,18 +177,18 @@ class HTTPClient(object):
             data = self.recvall(self.socket)
             
 
-            # Parse the response 
-            code = self.get_code(data)
-            header = self.get_headers(data)
-            print(header)
 
-            body = self.get_body(data)
 
         except Exception as e:
             print("[ERROR]: ", e)
         
         finally:
-            
+            # Parse the response
+            code = self.get_code(data)
+            header = self.get_headers(data)
+            print(header)
+
+            body = self.get_body(data)
             return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
