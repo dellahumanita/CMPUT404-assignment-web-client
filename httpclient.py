@@ -41,17 +41,51 @@ class HTTPClient(object):
     #def get_host_port(self,url):
 
     def connect(self, host, port):
+        '''
+            Connect to the specified host and port using the socket object 
+
+            Args:
+                host    (str)   :   The host specified in the request
+                port    (int)   :   The port specified in the request
+        '''
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
         return None
 
     def get_code(self, data):
+        '''
+            Returns the status code of the response
+
+            Args:
+                data    (str)   :   The response data from the server
+
+            Returns:
+                code    (int)   :   The status code of the response
+        '''
         return int(data.split('\r\n')[0].split(' ')[1])
 
     def get_headers(self,data):
+        '''
+            Returns the headers of the response
+
+            Args:
+                data    (str)   :   The response data from the server
+            
+            Returns:
+                header  (str)   :   The headers of the response
+        '''
         return data.split('\r\n\r\n')[0]
 
     def parse_header(self, header):
+        '''
+            Parses the header into a dictionary format
+
+            Args:
+                header    (str)   :   The header to be parsed
+            
+            Returns
+                header_dict    (dict)  :   The parsed header with {option : value}
+        '''
         header_dict = {}
         for line in header.split('\r\n'):
             if ':' in line:
@@ -63,17 +97,27 @@ class HTTPClient(object):
     def get_body(self, data):
         return data.split('\r\n\r\n')[1]
     
-    def build_request(self, options, command="GET", args=None):
+    def build_request(self, options, command="GET"):
         '''
+            Builds the request to be sent to the server
+            References:
+                - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
+
+            Args:
+                options    (dict)   :   The parsed URL options
+                command    (str)    :   The command to be sent to the server
+            
+            Returns:
+                request    (str)    :   The final request (header + body) to be sent to the server
         
-        References:
-            - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
         '''
 
+        # Set the date, target url and host from the parsed url
         date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         target = options['target']
         host = options['host']
 
+        # Build the request : common to both GET and POST 
         header = (
             f'{command} {target} HTTP/1.1\r\n'
             f'Date: {date}\r\n'
@@ -81,6 +125,7 @@ class HTTPClient(object):
             f'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36\r\n'
         )
 
+        # If the request is a POST, add the content-length and content-type headers
         if command == "POST":
             length = len(options['query']) 
             header += (
@@ -91,7 +136,7 @@ class HTTPClient(object):
 
         header += '\r\n'
 
-        # send the query
+        # Add the body if it is a POST 
         if command == 'POST':
             queries = options['query']
             return header + queries
@@ -99,6 +144,12 @@ class HTTPClient(object):
         return header
     
     def sendall(self, data):
+        '''
+            Sends the data to the server
+
+            Args:
+                data    (str)   :   The data to be sent to the server
+        '''
         if data:
             self.socket.sendall(data.encode('utf-8'))
         else:
@@ -110,11 +161,19 @@ class HTTPClient(object):
     # read everything from the socket
     def recvall(self, sock):
         '''
-        References
-            - https://stackoverflow.com/questions/4824451/detect-end-of-http-request-body/4824738
-            - https://www.binarytides.com/receive-full-data-with-the-recv-socket-function-in-python/
-            - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
-            - http://stupidpythonideas.blogspot.com/2013/05/sockets-are-byte-streams-not-message.html
+            Reads everything from the server socket. If a Content-Length header is present, read until the Content-Length is reached.
+
+            References
+                - https://stackoverflow.com/questions/4824451/detect-end-of-http-request-body/4824738
+                - https://www.binarytides.com/receive-full-data-with-the-recv-socket-function-in-python/
+                - https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data
+                - http://stupidpythonideas.blogspot.com/2013/05/sockets-are-byte-streams-not-message.html
+            
+            Args:
+                sock    (socket)    :   The socket object 
+
+            Returns:
+                data    (str)   :   The decoded data received from the server
         '''
         buffer = bytearray()
         done = False
@@ -140,10 +199,19 @@ class HTTPClient(object):
                 # if buffer matches content length, we are done
                 self.close()
                 done = True 
-        print("Done")
+        
         return buffer.decode('utf-8')
     
     def parse_url(self, url):
+        '''
+            Parses the URL into a dictionary format
+
+            Args:
+                url    (str)   :   The url to be parsed
+            
+            Returns:
+                options    (dict)   :   The parsed url with {url_option : value}
+        '''
 
         parsed_url = {}
 
@@ -164,15 +232,22 @@ class HTTPClient(object):
             port = u.port
         else:
             port = 80  # arbitrary port
+
         parsed_url['port'] = port
-
         parsed_url['query'] = u.query
-
-        print(parsed_url)
 
         return parsed_url
     
-    def GET(self, url, args=None):
+    def GET(self, url):
+        '''
+            Sends a GET request to the server
+            
+            Args:
+                url    (str)   :   The requested url
+            
+            Returns:
+                response    (str)   :   The response from the server
+        '''
         code = 500 # internal server error
         data = ''
         
@@ -200,22 +275,27 @@ class HTTPClient(object):
         finally:
             # Parse the response
             code = self.get_code(data)
-            header = self.get_headers(data)
-            print(header)
-
             body = self.get_body(data)
+
             return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         '''
+            Sends a POST request to the server
             References:
                 - https://reqbin.com/req/zvtstmpb/post-request-example
                 - https://stackoverflow.com/questions/28670835/python-socket-client-post-parameters
                 - https://stackoverflow.com/questions/5725430/http-test-server-accepting-get-post-requests
                 - https://stackoverflow.com/questions/1278705/when-i-catch-an-exception-how-do-i-get-the-type-file-and-line-number
 
+            Args:
+                url    (str)   :   The requested url
+                args   (dict)  :   The body to be sent to the server
+            
+            Returns:
+                response    (str)   :   The response from the server
+
         '''
-        # TODO: implement POST 
         code = 500
         body = ""
 
@@ -257,8 +337,8 @@ class HTTPClient(object):
             print(f'[{exc_type} in line {exc_tb.tb_lineno}]: {e}')
         
         finally:
-            #TODO: parse the response
-            print('Response:')
+            
+            print('> Response:')
             code = self.get_code(response)
             body =  self.get_body(response)
 
