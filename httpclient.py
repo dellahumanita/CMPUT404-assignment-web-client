@@ -24,7 +24,7 @@ import socket
 from urllib.parse import urlparse
 
 from datetime import datetime
-import os
+import sys, os
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -82,7 +82,7 @@ class HTTPClient(object):
         )
 
         if command == "POST":
-            length = len(options['query']) #TODO get length of body
+            length = len(options['query']) 
             header += (
                 f'Content-Type: application/x-www-form-urlencoded\r\n'
                 f'Content-Length: {length}\r\n'
@@ -140,7 +140,7 @@ class HTTPClient(object):
                 # if buffer matches content length, we are done
                 self.close()
                 done = True 
-                
+        print("Done")
         return buffer.decode('utf-8')
     
     def parse_url(self, url):
@@ -210,24 +210,30 @@ class HTTPClient(object):
         '''
             References:
                 - https://reqbin.com/req/zvtstmpb/post-request-example
+                - https://stackoverflow.com/questions/28670835/python-socket-client-post-parameters
+                - https://stackoverflow.com/questions/5725430/http-test-server-accepting-get-post-requests
+                - https://stackoverflow.com/questions/1278705/when-i-catch-an-exception-how-do-i-get-the-type-file-and-line-number
 
         '''
         # TODO: implement POST 
         code = 500
         body = ""
 
-        url = 'https://www.google.com/search?q=cat' #FIXME: temporarily hardcoded, getting a zsh error when trying to use this url
-
         options = self.parse_url(url)
         host = options['host']
         port = options['port']
-        args = options['query']
 
-        if args is None:
+        if args:
+            queries = args
+        else: 
+            queries = options['query']
+
+        if queries is None:
             print("[ERROR]: No POST arguments provided")
             code = 400
             body = 'Bad Request'
             return HTTPResponse(code, body)
+        
         
         try:
             # Connect to server and send data
@@ -242,15 +248,19 @@ class HTTPClient(object):
             self.sendall(request)
             
             # Get the response 
+            print('> Receiving data...')
             response = self.recvall(self.socket)
             print(response)
 
         except Exception as e:
-            print("[ERROR in POST]: ", e)
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            print(f'[{exc_type} in line {exc_tb.tb_lineno}]: {e}')
         
-        
-        
-
+        finally:
+            #TODO: parse the response
+            print('Response:')
+            code = self.get_code(response)
+            body =  self.get_body(response)
 
         return HTTPResponse(code, body)
 
