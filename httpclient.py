@@ -128,15 +128,16 @@ class HTTPClient(object):
 
         # Return the header if it is a GET request
         if command == 'GET':
+            header += f'Connection: close\r\n'
             header += f'\r\n'
             return header
         
         # Else, add the content-length and content-type headers
         if command == 'POST':
             if args:
-                encode_data = json.dumps(args)
+                encode_data = json.dumps(args).encode('utf-8')
                 length = len(encode_data) #FIXME
-                body = encode_data 
+                body = encode_data.decode('utf-8')
             else:
                 length = len(options['query']) 
                 body = options['query']
@@ -144,13 +145,14 @@ class HTTPClient(object):
             content_type = options['content_type']
 
             header += (
+                f'Accept: {content_type}\r\n'
                 f'Content-Type: {content_type}\r\n'
                 f'Content-Length: {length}\r\n'
-                f'Connection: close\r\n'
+                f'Connection: keep-alive\r\n'
+                
             )
 
             header += '\r\n'
-            print("BODY: ", body)
             return header + body
     
     def sendall(self, data):
@@ -193,7 +195,6 @@ class HTTPClient(object):
 
             if (part):
                 buffer.extend(part)
-                
                 # if the part ends in \r\n\r\n, then it is the header
                 if b'\r\n\r\n' in part:
                     header = self.get_headers(part.decode('utf-8'))
@@ -226,7 +227,7 @@ class HTTPClient(object):
         parsed_url = {}
 
         u = urlparse(url)
-        print(u)
+
         if u.path:
             target = u.path
         else:
@@ -274,7 +275,6 @@ class HTTPClient(object):
             # Send a request in bytes 
             print('> Requesting data...')
             request = self.build_request(options, 'GET')
-            print(request)
             self.sendall(request)
 
             print('> Receiving data...')
@@ -314,13 +314,11 @@ class HTTPClient(object):
         host = options['host']
         port = options['port']
         
-        # TODO parse parameters from string to dict 
         if args:
             queries = args
         else: 
             queries = options['query']
         
-        print("QUERIES: ", queries)
         if type(queries) is dict:
             options['content_type'] = 'application/json'
         elif type(queries) is str:
@@ -332,7 +330,6 @@ class HTTPClient(object):
             body = 'Bad Request'
             return HTTPResponse(code, body)
         
-        
         try:
             # Connect to server and send data
             print('> Connecting to server...')
@@ -340,7 +337,6 @@ class HTTPClient(object):
 
             # Build a request in bytes
             request = self.build_request(options, 'POST', args)
-            print(request)
             # Send the request 
             print('> Sending data...')
             self.sendall(request)
@@ -348,7 +344,6 @@ class HTTPClient(object):
             # Get the response 
             print('> Receiving data...')
             response = self.recvall(self.socket)
-            print('> Response:', response)
 
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -362,6 +357,7 @@ class HTTPClient(object):
 
     def command(self, url, command="GET", args=None):
         if (command == "POST"):
+            return self.POST(url, {"a": "aaaaaaaaaaaaa", "b": "bbbbbbbbbbbbbbbbbbbbbb", "c": "c", "d": "012345\r67890\n2321321\n\r"})
             return self.POST( url, args )
         else:
             return self.GET( url, args )
