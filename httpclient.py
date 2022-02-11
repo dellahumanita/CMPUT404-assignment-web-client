@@ -17,11 +17,12 @@
 # Write your own HTTP GET and POST
 # The point is to understand what you have to send and get experience with it
 
+import json
 import re
 import sys
 import socket
 # you may use urllib to encode data appropriately
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 from datetime import datetime
 import sys, os
@@ -97,7 +98,7 @@ class HTTPClient(object):
     def get_body(self, data):
         return data.split('\r\n\r\n')[1]
     
-    def build_request(self, options, command="GET"):
+    def build_request(self, options, command="GET", args=None):
         '''
             Builds the request to be sent to the server
             References:
@@ -125,23 +126,32 @@ class HTTPClient(object):
             f'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36\r\n'
         )
 
-        # If the request is a POST, add the content-length and content-type headers
-        if command == "POST":
-            length = len(options['query']) 
+        # Return the header if it is a GET request
+        if command == 'GET':
+            header += f'\r\n'
+            return header
+        
+        # Else, add the content-length and content-type headers
+        if command == 'POST':
+            if args:
+                encode_data = json.dumps(args)
+                length = len(encode_data) #FIXME
+                body = encode_data 
+            else:
+                length = len(options['query']) 
+                body = options['query']
+
+            content_type = options['content_type']
+
             header += (
-                f'Content-Type: application/x-www-form-urlencoded\r\n'
+                f'Content-Type: {content_type}\r\n'
                 f'Content-Length: {length}\r\n'
                 f'Connection: close\r\n'
             )
 
-        header += '\r\n'
-
-        # Add the body if it is a POST 
-        if command == 'POST':
-            queries = options['query']
-            return header + queries
-
-        return header
+            header += '\r\n'
+            print("BODY: ", body)
+            return header + body
     
     def sendall(self, data):
         '''
@@ -216,6 +226,7 @@ class HTTPClient(object):
         parsed_url = {}
 
         u = urlparse(url)
+        print(u)
         if u.path:
             target = u.path
         else:
@@ -302,12 +313,19 @@ class HTTPClient(object):
         options = self.parse_url(url)
         host = options['host']
         port = options['port']
-
+        
+        # TODO parse parameters from string to dict 
         if args:
             queries = args
         else: 
             queries = options['query']
-
+        
+        print("QUERIES: ", queries)
+        if type(queries) is dict:
+            options['content_type'] = 'application/json'
+        elif type(queries) is str:
+            options['content_type'] = 'application/x-www-form-urlencoded'
+        
         if queries is None:
             print("[ERROR]: No POST arguments provided")
             code = 400
@@ -321,7 +339,7 @@ class HTTPClient(object):
             self.connect(host, port)
 
             # Build a request in bytes
-            request = self.build_request(options, 'POST')
+            request = self.build_request(options, 'POST', args)
             print(request)
             # Send the request 
             print('> Sending data...')
@@ -330,17 +348,15 @@ class HTTPClient(object):
             # Get the response 
             print('> Receiving data...')
             response = self.recvall(self.socket)
-            print(response)
+            print('> Response:', response)
 
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print(f'[{exc_type} in line {exc_tb.tb_lineno}]: {e}')
         
         finally:
-            
-            print('> Response:')
             code = self.get_code(response)
-            body =  self.get_body(response)
+            body = self.get_body(response)
 
         return HTTPResponse(code, body)
 
