@@ -136,7 +136,7 @@ class HTTPClient(object):
         if command == 'POST':
             if args:
                 encode_data = json.dumps(args).encode('utf-8')
-                length = len(encode_data) #FIXME
+                length = len(encode_data) 
                 body = encode_data.decode('utf-8')
             else:
                 length = len(options['query']) 
@@ -357,7 +357,6 @@ class HTTPClient(object):
 
     def command(self, url, command="GET", args=None):
         if (command == "POST"):
-            return self.POST(url, {"a": "aaaaaaaaaaaaa", "b": "bbbbbbbbbbbbbbbbbbbbbb", "c": "c", "d": "012345\r67890\n2321321\n\r"})
             return self.POST( url, args )
         else:
             return self.GET( url, args )
