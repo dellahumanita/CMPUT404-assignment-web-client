@@ -22,7 +22,7 @@ import re
 import sys
 import socket
 # you may use urllib to encode data appropriately
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 
 from datetime import datetime
 import sys, os
@@ -142,17 +142,16 @@ class HTTPClient(object):
                 length = len(options['query']) 
                 body = options['query']
 
-            content_type = options['content_type']
 
             header += (
-                f'Accept: {content_type}\r\n'
-                f'Content-Type: {content_type}\r\n'
+                f'Content-Type: application/x-www-form-urlencoded\r\n'
                 f'Content-Length: {length}\r\n'
                 f'Connection: keep-alive\r\n'
                 
             )
 
             header += '\r\n'
+            print(header + body)
             return header + body
     
     def sendall(self, data):
@@ -213,9 +212,12 @@ class HTTPClient(object):
         
         return buffer.decode('utf-8')
     
-    def parse_url(self, url):
+    def parse_url(self, url, args=None):
         '''
             Parses the URL into a dictionary format
+
+            References:
+                - https://www.urlencoder.io/python/
 
             Args:
                 url    (str)   :   The url to be parsed
@@ -244,13 +246,17 @@ class HTTPClient(object):
             port = u.port
         else:
             port = 80  # arbitrary port
-
         parsed_url['port'] = port
-        parsed_url['query'] = u.query
+
+        if args:
+            parsed_url['query'] = urlencode(args)
+        else:
+            parsed_url['query'] = u.query
+
 
         return parsed_url
     
-    def GET(self, url):
+    def GET(self, url, args=None):
         '''
             Sends a GET request to the server
             
@@ -310,21 +316,12 @@ class HTTPClient(object):
         code = 500
         body = ""
 
-        options = self.parse_url(url)
+        options = self.parse_url(url, args)
         host = options['host']
         port = options['port']
         
-        if args:
-            queries = args
-        else: 
-            queries = options['query']
         
-        if type(queries) is dict:
-            options['content_type'] = 'application/json'
-        elif type(queries) is str:
-            options['content_type'] = 'application/x-www-form-urlencoded'
-        
-        if queries is None:
+        if options['query'] is None:
             print("[ERROR]: No POST arguments provided")
             code = 400
             body = 'Bad Request'
@@ -336,7 +333,7 @@ class HTTPClient(object):
             self.connect(host, port)
 
             # Build a request in bytes
-            request = self.build_request(options, 'POST', args)
+            request = self.build_request(options, 'POST')
             # Send the request 
             print('> Sending data...')
             self.sendall(request)
